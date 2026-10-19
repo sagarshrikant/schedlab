@@ -1,0 +1,118 @@
+@schema cliforge v2
+
+// schedlab command line. Generate with: scripts/gen_cli.sh
+//
+// What cliforge 0.4.0 checks and what it does not:
+//  - Checked by the generated parser: positive integer ranges (prio options,
+//    port), quantity units, choice names.
+//  - NOT checked: `required`, quantity ranges (duration, period, rate) and
+//    ranges with a negative lower bound (nice). args_validate() in src/main.c
+//    checks these, plus --cpu.
+//  - The generated check runs after the value is cast to the field type, so a
+//    narrow type (uint8) can wrap into range. Integers here use uint32/sint32
+//    to make that very unlikely.
+//  - scenario has a first member `none` so a missing --scenario is detectable.
+// `required` and the quantity/negative ranges below state the intent and become
+// real checks once cliforge enforces them.
+
+meta {
+    app     = "schedlab"
+    brief   = "Show how thread scheduling behaves on Linux, PREEMPT_RT and QNX"
+    version = "0.1.0"
+    prefix  = "sl"
+    output  = "cmdline"
+}
+
+// Named choice types: cliforge generates enums and parses the names.
+scenario-id = (none, s1, s2, s3, s4, s4net, s5, sender)
+policy-id   = (fifo, rr, other)
+
+section "Test setup" {
+    option scenario {
+        type     = scenario-id
+        required = mandatory
+        help     = "Scenario to run: s1 s2 s3 s4 s4net s5 sender."
+    }
+    option cpu {
+        type    = uint32
+        default = 1
+        help    = "Core that all test threads are pinned to."
+    }
+    option duration {
+        type    = duration units [s, ms] in 1s..3600s
+        default = 10s
+        help    = "Test length, for example 10s."
+    }
+    option csv {
+        // 'path', not 'file': the output file does not exist yet.
+        type = path
+        help = "Write results to this CSV file."
+    }
+    option quiet {
+        type = flag
+        help = "Print only the final result."
+    }
+}
+
+section "Scheduling" {
+    option policy {
+        type    = policy-id
+        default = fifo
+        help    = "Scheduling policy of the test threads."
+    }
+    option prio {
+        type    = uint32 in 1..99
+        default = 50
+        help    = "Priority of the test threads (fifo, rr)."
+    }
+    option nice {
+        type    = sint32 in -20..19
+        default = 0
+        help    = "Nice value (policy other). Write --nice=-5 for negatives."
+    }
+    option yield-every {
+        type    = uint32
+        default = 0
+        help    = "Hog calls sched_yield() every N iterations (0 = never)."
+    }
+}
+
+section "Priorities per role" {
+    option hog-prio {
+        type    = uint32 in 1..99
+        default = 70
+        help    = "FIFO priority of the hog thread."
+    }
+    option producer-prio {
+        type    = uint32 in 1..99
+        default = 50
+        help    = "FIFO priority of the producer thread (s4)."
+    }
+    option consumer-prio {
+        type    = uint32 in 1..99
+        default = 90
+        help    = "FIFO priority of the consumer thread (s4, s4net)."
+    }
+}
+
+section "Timing and network" {
+    option period {
+        type    = duration units [us, ms] in 100us..1s
+        default = 1ms
+        help    = "Period of the periodic thread, for example 1ms."
+    }
+    option port {
+        type    = uint32 in 1..65535
+        default = 5000
+        help    = "UDP port (s4net, sender)."
+    }
+    option target {
+        type = string
+        help = "Receiver IP address (sender)."
+    }
+    option rate {
+        type    = frequency units [Hz, kHz] in 1Hz..100kHz
+        default = 1kHz
+        help    = "Packets per second (sender), for example 1kHz."
+    }
+}
